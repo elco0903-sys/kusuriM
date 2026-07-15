@@ -205,9 +205,9 @@ export default function App() {
   const deleteTargetMedName = meds.find((m) => m.id === deleteTargetId)?.name || 'お薬';
 
   return (
-    <div className="bg-slate-50 text-slate-800 min-h-screen flex flex-col pb-20 md:pb-4 md:pt-4">
+    <div className="bg-slate-50 text-slate-800 min-h-screen md:min-h-0 flex flex-col md:py-6">
       {/* Device frame container for desktop view / clean full-viewport for mobile */}
-      <div className="w-full max-w-md mx-auto bg-white min-h-screen md:min-h-[840px] md:max-h-[880px] md:rounded-3xl md:shadow-2xl md:border md:border-slate-100 flex flex-col overflow-hidden relative">
+      <div className="w-full max-w-md mx-auto bg-white h-[100dvh] md:h-[840px] md:rounded-3xl md:shadow-2xl md:border md:border-slate-100 flex flex-col overflow-hidden relative">
         
         {/* Header */}
         <header className="bg-gradient-to-r from-blue-500 to-teal-500 text-white px-5 pt-6 pb-5 shadow-sm rounded-b-3xl shrink-0">
