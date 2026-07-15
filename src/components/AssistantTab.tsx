@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Sparkles, Info } from 'lucide-react';
+import { Send, Bot, Sparkles, Info, Settings, ShieldCheck } from 'lucide-react';
 import { ChatMessage, Medication, IntakeLog } from '../types';
 
 interface AssistantTabProps {
@@ -21,16 +21,51 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
   ]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load API Key on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem('om_gemini_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
 
   // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const saveApiKey = () => {
+    localStorage.setItem('om_gemini_key', apiKey.trim());
+    setSaveStatus(true);
+    setTimeout(() => setSaveStatus(false), 2000);
+  };
+
   const handleSend = async (textToSend?: string) => {
     const query = textToSend || input.trim();
     if (!query || isGenerating) return;
+
+    const storedKey = localStorage.getItem('om_gemini_key')?.trim() || apiKey.trim();
+    
+    if (!storedKey) {
+      // Append info warning to user to insert their API Key
+      setMessages(prev => [
+        ...prev,
+        { id: 'user-temp-' + Date.now(), role: 'user', text: query },
+        { 
+          id: 'err-key-' + Date.now(), 
+          role: 'error', 
+          text: 'AIアシスタントをご利用いただくには、右上の「設定」からGemini APIキーの登録が必要です。登録されたキーはご自身のブラウザ(LocalStorage)にのみ安全に保存され、第三者に共有されることはありません。' 
+        }
+      ]);
+      setShowSettings(true);
+      if (!textToSend) setInput('');
+      return;
+    }
 
     if (!textToSend) setInput('');
 
@@ -47,38 +82,72 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
     const loadingId = 'loading-' + Date.now();
     setMessages(prev => [...prev, { id: loadingId, role: 'loading', text: 'お薬のアドバイスを考えています...' }]);
 
+    // Prepare system instructions context
+    const medsContext = meds && meds.length > 0 
+      ? JSON.stringify(meds.map((m: any) => ({
+          name: m.name,
+          dosageQty: m.dosageQty,
+          dosageUnit: m.dosageUnit,
+          stock: m.stock,
+          timing: m.timing,
+          memo: m.memo || "特になし"
+        })), null, 2)
+      : "登録されたお薬はありません。";
+
+    const historyContext = JSON.stringify(intakeLog, null, 2);
+
+    const systemInstruction = `あなたは親切でプロフェッショナルな「AIお薬アシスタント（薬剤師キャラ）」です。
+患者（ユーザー）からの質問に対して、登録されているお薬情報と服薬履歴をふまえて、優しく丁寧、かつ適切に日本語でアドバイスしてください。
+
+【現在の登録お薬（残量情報を含む）】
+${medsContext}
+
+【直近の服薬履歴（服用したかどうかのログ）】
+${historyContext}
+
+【指示事項】
+1. 残量が少なくなっているお薬（例えば残り5回分以下など、1回の服用量(dosageQty) × 5 以下のストック）がある場合は、優しく注意を促し、早めの受診や薬局での処方箋手続きを勧めてください。
+2. 飲み合わせ、副作用、飲み忘れの対処方法、お薬に関する疑問などについて、医学・薬学的知識に基づいて分かりやすく解説してください。
+3. 文末には必ず「※このアドバイスは一般的な情報提供であり、医師や薬剤師の診断の代わりにはなりません。重要な判断や体調不良の際は、必ず主治医や薬剤師にご相談ください。」という免責事項を優しく含めてください。
+4. 返答は丁寧な日本語（「〜です」「〜ます」調）で、読みやすくマークダウン形式（太字など）を適度に使って整理して返してください。
+`;
+
+    // Call Gemini API directly from client side
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${storedKey}`;
+    const payload = {
+      contents: [{ parts: [{ text: query }] }],
+      systemInstruction: { parts: [{ text: systemInstruction }] }
+    };
+
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: query,
-          meds: meds,
-          history: intakeLog
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        let errMsg = `エラーが発生しました (ステータス: ${response.status})`;
+        let errorMsg = `APIエラーが発生しました。`;
         try {
           const errData = await response.json();
-          if (errData.error) errMsg += `: ${errData.error}`;
+          if (errData.error?.message) {
+            errorMsg += `詳細: ${errData.error.message}`;
+          }
         } catch {
-          const errText = await response.text().catch(() => '');
-          if (errText) errMsg += `: ${errText.slice(0, 100)}`;
+          errorMsg += `ステータスコード: ${response.status}`;
         }
-        throw new Error(errMsg);
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
+      const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
       setMessages(prev => {
-        // Remove loading state and append assistant response
         const filtered = prev.filter(m => m.id !== loadingId);
-        if (data.text) {
-          return [...filtered, { id: 'ast-' + Date.now(), role: 'assistant', text: data.text }];
+        if (generatedText) {
+          return [...filtered, { id: 'ast-' + Date.now(), role: 'assistant', text: generatedText }];
         } else {
           return [...filtered, { id: 'err-' + Date.now(), role: 'error', text: 'AIからの有効な回答を受信できませんでした。' }];
         }
@@ -87,7 +156,7 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
       console.error("Chat error:", error);
       setMessages(prev => [
         ...prev.filter(m => m.id !== loadingId),
-        { id: 'err-' + Date.now(), role: 'error', text: `${error.message || '通信エラーが発生しました。しばらく待ってからもう一度お試しください。'}` }
+        { id: 'err-' + Date.now(), role: 'error', text: `${error.message || '通信エラーが発生しました。APIキーに誤りがあるか、しばらく待ってからもう一度お試しください。'}` }
       ]);
     } finally {
       setIsGenerating(false);
@@ -110,15 +179,56 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
     <div className="space-y-4 flex flex-col h-[520px]">
       
       {/* Title */}
-      <div className="flex items-center space-x-2 shrink-0">
-        <div className="bg-gradient-to-r from-teal-400 to-emerald-400 p-2 rounded-xl text-white">
-          <Sparkles className="w-5 h-5" />
+      <div className="flex items-center justify-between shrink-0">
+        <div className="flex items-center space-x-2">
+          <div className="bg-gradient-to-r from-teal-400 to-emerald-400 p-2 rounded-xl text-white">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-800 text-base">お薬AIアシスタント</h2>
+            <p className="text-[10px] text-slate-400">ご自身のGemini APIキーで安全に動作</p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-bold text-slate-800 text-base">お薬AIアシスタント</h2>
-          <p className="text-[10px] text-slate-400">Geminiがお薬の疑問にお答えします</p>
-        </div>
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className="text-xs text-blue-500 hover:text-blue-600 font-semibold flex items-center space-x-1 p-1 hover:bg-slate-100 rounded-lg transition"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          <span>設定</span>
+        </button>
       </div>
+
+      {/* API settings panel */}
+      {showSettings && (
+        <div className="bg-slate-100 rounded-2xl p-3 border border-slate-200 text-[11px] space-y-2 animate-[fadeIn_0.15s_ease-out] shrink-0">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-slate-700">Gemini APIキー設定 (ブラウザ保存)</span>
+            <span className="text-[9px] text-teal-600 font-bold flex items-center space-x-0.5">
+              <ShieldCheck className="w-3 h-3" />
+              <span>端末保存・安全</span>
+            </span>
+          </div>
+          <p className="text-slate-500 leading-normal">
+            無料枠のあるGemini APIキーを利用します。キーは外部サーバーを介さず直接ブラウザから安全に送信されます。
+          </p>
+          <div className="flex space-x-2">
+            <input 
+              type="password" 
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="AIzaSy..." 
+              className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white font-mono"
+            />
+            <button 
+              onClick={saveApiKey} 
+              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold shrink-0 transition active:scale-95 text-xs"
+            >
+              保存
+            </button>
+          </div>
+          {saveStatus && <p className="text-[10px] text-teal-600 font-semibold">✓ APIキーをLocalStorageに安全に保存しました</p>}
+        </div>
+      )}
 
       {/* Quick suggestions */}
       <div className="flex flex-wrap gap-2 shrink-0">
@@ -163,9 +273,9 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
 
             if (msg.role === 'error') {
               return (
-                <div key={msg.id} className="flex items-center space-x-2 text-rose-600 bg-rose-50 border border-rose-100 p-3 rounded-2xl text-xs font-semibold">
-                  <Info className="w-4 h-4 shrink-0" />
-                  <span>{msg.text}</span>
+                <div key={msg.id} className="flex items-start space-x-2 text-rose-600 bg-rose-50 border border-rose-100 p-3.5 rounded-2xl text-xs font-semibold">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{msg.text}</span>
                 </div>
               );
             }
@@ -176,7 +286,7 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
                 <div className="w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center shrink-0 shadow-sm">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[85%] text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap">
+                <div className="bg-white p-3.5 rounded-2xl rounded-tl-none shadow-sm max-w-[85%] text-xs font-medium text-slate-700 leading-relaxed whitespace-pre-wrap">
                   {msg.text}
                   {msg.id === 'welcome-msg' && (
                     <span className="text-[9px] text-rose-500 font-bold block mt-2.5 leading-normal bg-rose-50 border border-rose-100 p-1.5 rounded-lg">
