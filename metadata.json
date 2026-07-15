@@ -1,0 +1,6 @@
+{
+  "name": "お薬メモリー",
+  "description": "お薬の服薬スケジュール登録、自動残量管理、およびAIお薬アシスタントによる相談ができるお薬手帳アプリ。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
