@@ -9,15 +9,25 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-// Initialize Gemini SDK with API Key from environment variables
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY 環境変数が設定されていません。AI StudioのSettingsまたはSecretsからAPIキーを設定してください。");
     }
+    aiInstance = new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
-});
+  return aiInstance;
+}
 
 // AI Chat endpoint
 app.post("/api/chat", async (req, res) => {
@@ -26,6 +36,8 @@ app.post("/api/chat", async (req, res) => {
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
+
+    const ai = getAI();
 
     const medsContext = meds && meds.length > 0 
       ? JSON.stringify(meds.map((m: any) => ({

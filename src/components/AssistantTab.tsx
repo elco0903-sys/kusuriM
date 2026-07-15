@@ -60,22 +60,34 @@ export default function AssistantTab({ meds, intakeLog }: AssistantTabProps) {
         })
       });
 
+      if (!response.ok) {
+        let errMsg = `エラーが発生しました (ステータス: ${response.status})`;
+        try {
+          const errData = await response.json();
+          if (errData.error) errMsg += `: ${errData.error}`;
+        } catch {
+          const errText = await response.text().catch(() => '');
+          if (errText) errMsg += `: ${errText.slice(0, 100)}`;
+        }
+        throw new Error(errMsg);
+      }
+
       const data = await response.json();
 
       setMessages(prev => {
         // Remove loading state and append assistant response
         const filtered = prev.filter(m => m.id !== loadingId);
-        if (response.ok && data.text) {
+        if (data.text) {
           return [...filtered, { id: 'ast-' + Date.now(), role: 'assistant', text: data.text }];
         } else {
-          return [...filtered, { id: 'err-' + Date.now(), role: 'error', text: data.error || 'お薬の情報を取得できませんでした。時間をおいてもう一度お試しください。' }];
+          return [...filtered, { id: 'err-' + Date.now(), role: 'error', text: 'AIからの有効な回答を受信できませんでした。' }];
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chat error:", error);
       setMessages(prev => [
         ...prev.filter(m => m.id !== loadingId),
-        { id: 'err-' + Date.now(), role: 'error', text: '通信エラーが発生しました。インターネット接続を確認し、もう一度お試しください。' }
+        { id: 'err-' + Date.now(), role: 'error', text: `${error.message || '通信エラーが発生しました。しばらく待ってからもう一度お試しください。'}` }
       ]);
     } finally {
       setIsGenerating(false);
