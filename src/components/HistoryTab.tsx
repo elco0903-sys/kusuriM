@@ -237,7 +237,11 @@ export default function HistoryTab({
             {streak}<span className="text-xs font-semibold ml-0.5">日</span>
           </div>
           <p className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">
-            毎日欠かさず飲めています！
+            {streak >= 14 ? "すばらしい習慣です！2週間達成！" :
+             streak >= 7 ? "素晴らしい！1週間継続できています！" :
+             streak >= 3 ? "その調子！3日以上継続中！" :
+             streak > 0 ? "この調子で続けていきましょう！" :
+             "今日からまた記録を伸ばしましょう！"}
           </p>
         </div>
         <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 text-center">
