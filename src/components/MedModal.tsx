@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Edit3 } from 'lucide-react';
+import { X, Plus, Edit3, Minus } from 'lucide-react';
 import { Medication, TimingType, MedIconType, MedColorType } from '../types';
 
 interface MedModalProps {
@@ -117,41 +117,118 @@ export default function MedModal({ isOpen, onClose, onSave, editingMed }: MedMod
               />
             </div>
 
-            {/* Dosage & Stock Grid */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1 col-span-1">
-                <label className="text-xs font-bold text-slate-500 block">1回の量 *</label>
-                <input
-                  type="number"
-                  value={dosageQty}
-                  onChange={(e) => setDosageQty(parseFloat(e.target.value) || 1)}
-                  min="0.1"
-                  step="any"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  required
-                />
+            {/* Dosage & Unit & Stock Area */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {/* 1回の量 */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 block">1回の量 *</label>
+                  <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setDosageQty(prev => Math.max(0.1, Math.round((prev - 0.5) * 10) / 10))}
+                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-200 shadow-sm transition active:scale-95 shrink-0"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <input
+                      type="number"
+                      value={dosageQty}
+                      onChange={(e) => setDosageQty(Math.max(0.1, parseFloat(e.target.value) || 1))}
+                      min="0.1"
+                      step="0.1"
+                      className="w-full text-center bg-transparent border-0 text-sm focus:outline-none font-bold text-slate-850"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setDosageQty(prev => Math.round((prev + 0.5) * 10) / 10)}
+                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-200 shadow-sm transition active:scale-95 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 単位 */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 block">単位 *</label>
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1">
+                      {['錠', '包', 'ml', '滴'].map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => setDosageUnit(u)}
+                          className={`flex-1 py-1 rounded-lg text-[11px] font-bold border transition ${
+                            dosageUnit === u
+                              ? 'bg-blue-50 border-blue-200 text-blue-600'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={dosageUnit}
+                      onChange={(e) => setDosageUnit(e.target.value)}
+                      placeholder="その他..."
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white font-medium"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1 col-span-1">
-                <label className="text-xs font-bold text-slate-500 block">単位 *</label>
-                <input
-                  type="text"
-                  value={dosageUnit}
-                  onChange={(e) => setDosageUnit(e.target.value)}
-                  placeholder="錠"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  required
-                />
-              </div>
-              <div className="space-y-1 col-span-1">
-                <label className="text-xs font-bold text-slate-500 block">総在庫数 *</label>
-                <input
-                  type="number"
-                  value={stock}
-                  onChange={(e) => setStock(parseInt(e.target.value) || 0)}
-                  min="0"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  required
-                />
+
+              {/* 総在庫数 */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 block">現在の総在庫数 *</label>
+                <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1">
+                  <div className="flex space-x-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setStock(prev => Math.max(0, prev - 10))}
+                      className="px-2 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-500 rounded-lg border border-slate-200 shadow-sm transition active:scale-95 text-[10px] font-bold"
+                    >
+                      -10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStock(prev => Math.max(0, prev - 1))}
+                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-500 rounded-lg border border-slate-200 shadow-sm transition active:scale-95"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  
+                  <input
+                    type="number"
+                    value={stock}
+                    onChange={(e) => setStock(parseInt(e.target.value) || 0)}
+                    min="0"
+                    className="w-full text-center bg-transparent border-0 text-sm focus:outline-none font-bold text-slate-850"
+                    required
+                  />
+
+                  <div className="flex space-x-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setStock(prev => prev + 1)}
+                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-500 rounded-lg border border-slate-200 shadow-sm transition active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStock(prev => prev + 10)}
+                      className="px-2 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-500 rounded-lg border border-slate-200 shadow-sm transition active:scale-95 text-[10px] font-bold"
+                    >
+                      +10
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
