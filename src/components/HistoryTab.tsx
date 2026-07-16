@@ -54,12 +54,15 @@ export default function HistoryTab({
   // 1. Current Streak: Start from today and go backwards.
   // A day counts towards the streak if all scheduled meds on that day were taken.
   // If no meds are scheduled on a day, it doesn't break the streak (skip it).
+  // For TODAY only: if today is NOT fully complete (since the day is ongoing), we do not count it but we do NOT break either; we continue looking backward from yesterday.
   let streak = 0;
   const checkDate = new Date();
+  const todayStr = getFormattedDate(new Date());
   let maxBacktrackDays = 60; // limit backtrack to prevent infinite loop
 
   while (maxBacktrackDays > 0) {
     const checkDateStr = getFormattedDate(checkDate);
+    const isToday = checkDateStr === todayStr;
     let dayTotal = 0;
     let dayTaken = 0;
 
@@ -83,8 +86,14 @@ export default function HistoryTab({
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
     } else {
-      // Partially completed or untouched scheduled day breaks the streak
-      break;
+      if (isToday) {
+        // Today is incomplete but it's today (ongoing), so don't break the streak.
+        // Just go to yesterday without incrementing streak.
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        // Partially completed or untouched scheduled day in the past breaks the streak
+        break;
+      }
     }
     maxBacktrackDays--;
   }
