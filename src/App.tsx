@@ -278,6 +278,7 @@ export default function App() {
               }}
               onEditMed={handleEditMed}
               onDeleteMed={handleDeleteMedClick}
+              onReorderMeds={saveMeds}
             />
           )}
 
